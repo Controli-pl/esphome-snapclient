@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 
 #include "driver/i2s_std.h"
+#include <algorithm>
 #if CONFIG_USE_DSP_PROCESSOR
 #include "dsp_processor.h"
 #endif

@@ -88,14 +88,31 @@ void SnapClientComponent::loop() {
       this->mute_state_ = dac_data.mute;
       ESP_LOGD(TAG, "%s", dac_data.mute ? "Mute" : "Unmute");
     }
+
     if (dac_data.volume != dac_data_old.volume) {
-      this->volume_ = (float) dac_data.volume / 100;
+      const float server_volume =
+      std::clamp(static_cast<float>(dac_data.volume) / 100.0f, 0.0f, 1.0f);
+
+  // Kalibracja lokalna sufitu:
+  // 20% Snapcast -> 60% do ES8388
+  // 100% Snapcast -> 100% do ES8388
+  constexpr float VOLUME_OFFSET = 0.50f;
+  this->volume_ = VOLUME_OFFSET + (1.0f - VOLUME_OFFSET) * server_volume;
+
+  if (server_volume <= 0.0f) {
+    this->volume_ = 0.0f;
+  }
+
+  ESP_LOGD(TAG, "Snap volume=%d -> calibrated DAC volume=%.3f",
+           dac_data.volume, this->volume_);
+
 #ifdef USE_AUDIO_DAC
-      if (this->audio_dac_ != nullptr) {
-        this->audio_dac_->set_volume(this->volume_);
-      }
+  if (this->audio_dac_ != nullptr) {
+    this->audio_dac_->set_volume(this->volume_);
+  }
 #endif
     }
+    
     dac_data_old = dac_data;
   }
 }

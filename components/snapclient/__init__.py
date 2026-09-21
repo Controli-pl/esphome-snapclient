@@ -40,7 +40,11 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(SnapClientComponent),
             cv.Optional(CONF_NAME): cv.string,
-            cv.Optional(CONF_HOSTNAME, default=0): cv.domain,
+            # PATCH: default="" (string) zamiast default=0 (int) - cv.domain
+            # wymaga stringa, a "0" jako int nigdy nie przechodzil walidacji
+            # w nowszych wersjach ESPHome (blad "Invalid domain: 0.").
+            # Pusty string oznacza "brak hostname" -> wlacza mDNS.
+            cv.Optional(CONF_HOSTNAME, default=""): cv.Any(cv.domain, cv.string),
             cv.Optional(CONF_PORT, default=1704): cv.port,
             cv.Required(CONF_I2S_DOUT_PIN): pins.internal_gpio_output_pin_number,
             cv.Optional(CONF_MUTE_PIN): pins.gpio_output_pin_schema,
@@ -92,6 +96,7 @@ async def to_code(config):
         repo="https://github.com/CarlosDerSeher/snapclient.git",
         path="components/dsp_processor",
     )
+
     if CONF_WEBSERVER_PORT in config:
         cg.add_build_flag(f"-DCONFIG_WEB_PORT={config[CONF_WEBSERVER_PORT]}")
         add_idf_component(
@@ -100,6 +105,7 @@ async def to_code(config):
             repo="https://github.com/CarlosDerSeher/snapclient.git",
             path="components/ui_http_server",
         )
+
     if (CONF_AUDIO_DAC not in config) or (CONF_WEBSERVER_PORT in config):
         add_idf_sdkconfig_option("CONFIG_USE_DSP_PROCESSOR", True)
         add_idf_sdkconfig_option("CONFIG_SNAPCLIENT_DSP_FLOW_STEREO", True)
@@ -107,13 +113,14 @@ async def to_code(config):
         add_idf_sdkconfig_option("CONFIG_SNAPCLIENT_USE_SOFT_VOL", True)
     if CONF_NAME not in config:
         config[CONF_NAME] = CORE.name or ""
-    # cg.add_build_flag("-DCONFIG_SNAPSERVER_HOST='"+str(config[CONF_HOSTNAME])+"'")
-    # cg.add_build_flag("-DCONFIG_SNAPSERVER_PORT="+str(config[CONF_PORT]))
-    if config[CONF_HOSTNAME] == 0:
+
+    # PATCH: porownanie z "" (string) zamiast z 0 (int) - zgodnie z nowym
+    # default powyzej. Logika (wlacz mDNS gdy brak hostname) bez zmian.
+    if config[CONF_HOSTNAME] == "":
         cg.add_build_flag("-DCONFIG_SNAPCLIENT_USE_MDNS=1")
     else:
         cg.add_build_flag("-DCONFIG_SNAPCLIENT_USE_MDNS=0")
-    # cg.add_build_flag("-DCONFIG_SNAPCLIENT_NAME='"+config[CONF_NAME]+"'")
+
     cg.add_build_flag("-DCONFIG_USE_SAMPLE_INSERTION=1")
     # fix for esp-idf 5.4
     cg.add_build_flag("-Wno-error=incompatible-pointer-types")
